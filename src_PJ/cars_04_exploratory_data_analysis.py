@@ -46,7 +46,7 @@ def plot_histograms_with_stats(df):
         skew_val = values.skew()
 
         ax = plt.subplot(n_rows, n_cols, i)
-        sns.histplot(values, kde=True, color="steelblue", bins=30, alpha=0.7, ax=ax)
+        sns.histplot(values, kde=True, color="steelblue", bins=40, alpha=0.7, ax=ax)
 
         # helper lines
         ax.axvline(mean_val, linestyle="dashed", color="green", label=f"Mean: {mean_val:.2f}")

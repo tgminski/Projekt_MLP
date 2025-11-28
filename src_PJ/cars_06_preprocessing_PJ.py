@@ -153,6 +153,7 @@ def prepare_data_for_ml(
     X, y = split_features_target(df, target_col=target_col)
 
     # 2. Wykrycie cech
+
     feature_info = detect_numeric_and_categorical_features(
         X,
         origin_prefix=origin_prefix
