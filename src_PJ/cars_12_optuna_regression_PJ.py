@@ -43,18 +43,18 @@ def load_data(input_path: Path):
     return X, y, preprocessor
 
 
-# =====================================================================
+
 # 2. Funkcja celu dla Optuny
-# =====================================================================
+
 
 def objective(trial, X, y, preprocessor):
     params = {
         "n_estimators": trial.suggest_int("n_estimators", 300, 600),  # wokół 400
-        "max_depth": trial.suggest_int("max_depth", 3, 6),  # Twój baseline = 4
+        "max_depth": trial.suggest_int("max_depth", 3, 6),  # Mój baseline = 4
         "learning_rate": trial.suggest_float("learning_rate", 0.02, 0.15, log=True),
         "subsample": trial.suggest_float("subsample", 0.8, 1.0),  # wokół 0.9
         "colsample_bytree": trial.suggest_float("colsample_bytree", 0.8, 1.0),
-        "reg_alpha": trial.suggest_float("reg_alpha", 0.0, 1.0),  # nie pozwalamy na zbyt duże kary
+        "reg_alpha": trial.suggest_float("reg_alpha", 0.0, 1.0),  # nie pozwalam na zbyt duże kary
         "reg_lambda": trial.suggest_float("reg_lambda", 0.5, 2.0),  # delikatna regularyzacja
         "min_child_weight": trial.suggest_int("min_child_weight", 1, 5),
 
@@ -86,9 +86,8 @@ def objective(trial, X, y, preprocessor):
     return -scores.mean()
 
 
-# =====================================================================
 # 3. Uruchomienie Optuny
-# =====================================================================
+
 
 def run_optuna_xgb(input_path: Path, n_trials=50):
 
@@ -108,9 +107,9 @@ def run_optuna_xgb(input_path: Path, n_trials=50):
     return study, preprocessor
 
 
-# =====================================================================
+
 # 4. Trenowanie finalnego modelu i zapis do models_PJ/regression/
-# =====================================================================
+
 
 def train_best_model(input_path: Path, best_params: Dict[str, Any], preprocessor):
 
@@ -150,9 +149,9 @@ def train_best_model(input_path: Path, best_params: Dict[str, Any], preprocessor
         "R2": r2_score(y_test, y_pred)
     }
 
-    # ===============================================================
+
     # --- Zapis wyników do models_PJ/regression/
-    # ===============================================================
+
     MODELS_REGRESSION_DIR.mkdir(parents=True, exist_ok=True)
 
     OUTPUT_PIPELINE = MODELS_REGRESSION_DIR / "optuna_final_pipeline_regression.pkl"
