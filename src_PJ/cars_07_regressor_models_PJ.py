@@ -16,7 +16,7 @@ def get_regression_models():
     models = {
         "LinearRegression": LinearRegression(),
         "Ridge": Ridge(alpha=1.0),
-        "Lasso": Lasso(alpha=0.001),  # małe alpha, żeby nie wyzerował wszystkiego
+        "Lasso": Lasso(alpha=0.01, max_iter=50000),  # małe alpha, żeby nie wyzerował wszystkiego
         "KNNRegressor": KNeighborsRegressor(n_neighbors=5),
         "RandomForestRegressor": RandomForestRegressor(
             n_estimators=100,

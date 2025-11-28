@@ -151,13 +151,13 @@ def compute_shap_values(pipeline, X: pd.DataFrame):
     # Transformacja cech tak, jak widzi je model (skalowanie, passthrough OHE itd.)
     X_transformed = prep.transform(X)
 
-    print("[INFO] Building SHAP TreeExplainer for XGBRegressor...")
+    print("Building SHAP TreeExplainer for XGBRegressor...")
     explainer = shap.TreeExplainer(model)
 
-    print("[INFO] Computing SHAP values for all samples...")
+    print("Computing SHAP values for all samples...")
     shap_values = explainer(X_transformed)
 
-    print("[INFO] SHAP values computed. Shape:", np.array(shap_values.values).shape)
+    print("SHAP values computed. Shape:", np.array(shap_values.values).shape)
 
     return shap_values
 
@@ -185,7 +185,7 @@ def run_shap_for_optuna_model(
     shap_vals : Explanation (wartości SHAP)
     metrics   : dict z MAE_all, RMSE_all, R2_all
     """
-    print("[INFO] === SHAP analysis for Optuna XGBRegressor ===")
+    print("[=== SHAP analysis for Optuna XGBRegressor ===")
 
     # 1. Dane
     X, y = load_data(input_path)
@@ -199,7 +199,7 @@ def run_shap_for_optuna_model(
     # 4. Wartości SHAP
     shap_values = compute_shap_values(pipeline, X)
 
-    print("\n[INFO] Done. You can now create SHAP plots, e.g.:")
+    print("\nDone. You can now create SHAP plots, e.g.:")
     print("  import shap")
     print("  shap.summary_plot(shap_values, X)")
     print("  shap.summary_plot(shap_values, X, plot_type='bar')")

@@ -27,7 +27,7 @@ def get_classification_models():
             max_depth=4,
             subsample=0.9,
             colsample_bytree=0.9,
-            random_state=42,
+            random_state=SEED,
             eval_metric="mlogloss"
         )
     }
