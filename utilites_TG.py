@@ -6,12 +6,10 @@
 
 import numpy as np
 import pandas as pd
-
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 from sklearn.preprocessing import StandardScaler
-
 from sklearn.model_selection import train_test_split
 
 from sklearn.linear_model import LinearRegression
@@ -20,11 +18,11 @@ from sklearn.decomposition import PCA
 
 from sklearn.metrics import root_mean_squared_error
 
+import optuna
 
 #------------------------------------------------------------
 # clases
 #------------------------------------------------------------
-
 
 class models():
 
@@ -34,8 +32,13 @@ class models():
         assert type(df_train_test[1])==type(pd.DataFrame()), 'data[1] must be pandas DataFrame'
         assert type(df_train_test[2])==type(pd.DataFrame()), 'data[2] must be pandas DataFrame'
         assert type(df_train_test[3])==type(pd.DataFrame()), 'data[3] must be pandas DataFrame'
-        assert type(data_index)==type(pd.DataFrame().index), 'data_index must be pandas DataFrame.index'
+        #assert type(data_index)==type(pd.DataFrame().index), 'data_index must be pandas DataFrame.index'
         self.X_train, self.X_test, self.y_train, self.y_test = df_train_test
+        self.X_train = self.X_train.copy(deep=True)
+        self.X_test = self.X_test.copy(deep=True)
+        self.y_train = self.y_train.copy(deep=True)
+        self.y_test = self.y_test.copy(deep=True)
+
         self.data_index = data_index.copy(deep=True)
 
         assert self.X_train.index.isin(self.data_index).all(), 'Index of X_train must be in Data_index'
@@ -95,36 +98,43 @@ class models():
         
 
     def fit_and_score_new_model(self, data=None, target=None, model_name=[], scaler=StandardScaler, model=LinearRegression, model_arg={}, y_transf='x'):
-        
         assert type(data)==type(pd.DataFrame()), 'data must be pandas Dataframe'
-        assert data.index.isin(self.data_index).all(), 'Index of X_train must be in Data_index'
+        #assert data.index.isin(self.data_index).all(), 'Index of X_train must be in Data_index'
         
         # copy by initial splitting (DataFrame indexes)
-        X_train = data.loc[self.X_train.index,:].drop(target,axis=1).copy(deep=True)
-        X_test = data.loc[self.X_test.index,:].drop(target,axis=1).copy(deep=True)
         y_train = data.loc[self.y_train.index,[target]].copy(deep=True)
         y_test = data.loc[self.y_test.index,[target]].copy(deep=True)
-
-        self.fit_last_feature_names = X_train.columns.tolist()
-        self.fit_last_target_names = y_train.columns.tolist()
+        X_train = data.loc[self.X_train.index,:].drop(target,axis=1).copy(deep=True)
+        X_test = data.loc[self.X_test.index,:].drop(target,axis=1).copy(deep=True)
 
         scaler_X = scaler()
         scaler_y = scaler()
-        X_train_scaled = scaler_X.fit_transform(X_train.to_numpy())
-        y_train_scaled = scaler_y.fit_transform(y_train.to_numpy().reshape((-1,1)))
-        X_test_scaled = scaler_X.transform(X_test.to_numpy())
-        y_test_scaled = scaler_y.transform(y_test.to_numpy().reshape((-1,1)))
+
+        scaler_X.fit(X=X_train)
+        #self._check_scaler(scaler_X)
+        scaler_y.fit(X=y_train)
+        #self._check_scaler(scaler_y)
+        X_train_scaled = scaler_X.transform(X=X_train)
+        y_train_scaled = scaler_y.transform(X=y_train)
+        X_test_scaled = scaler_X.transform(X=X_test)
+        y_test_scaled = scaler_y.transform(X=y_test)
+
+        self.fit_last_feature_names = X_train.columns.tolist()
+        self.fit_last_target_names = y_train.columns.tolist()
+        self.fit_last_X_train_scaled = X_train_scaled.copy()
+        self.fit_last_X_test_scaled = X_test_scaled.copy()
 
         model = model(**model_arg)
-        model.fit(X_train_scaled,y_train_scaled)
-        score_base_train = model.score(X_train_scaled,y_train_scaled)
-        score_base_test = model.score(X_test_scaled,y_test_scaled)
+        model.fit(X=X_train_scaled,y=y_train_scaled)
+        score_train = model.score(X=X_train_scaled,y=y_train_scaled)
+        score_test = model.score(X=X_test_scaled,y=y_test_scaled)
         #y_predict_train =  scaler_y.inverse_transform( model.predict(X_train_scaled).reshape((-1,1)) )#.reshape((-1,))
         #y_predict_test =  scaler_y.inverse_transform( model.predict(X_test_scaled).reshape((-1,1)) )#.reshape((-1,))
         y_predict_train_scaled =  model.predict(X_train_scaled)
         y_predict_test_scaled =  model.predict(X_test_scaled)
 
         self._fit_last_residuals = np.subtract(y_train_scaled, y_predict_train_scaled)
+        self._fit_last_residuals_test = np.subtract(y_test_scaled, y_predict_test_scaled)
 
         #rmse_train = root_mean_squared_error(y_true=y_train.to_numpy().reshape((-1,1)), y_pred=y_predict_train)
         #rmse_test = root_mean_squared_error(y_true=y_test.to_numpy().reshape((-1,1)), y_pred=y_predict_test)
@@ -133,8 +143,19 @@ class models():
         
         result_index = len(self.results)
         self.results.loc[result_index,['model_name','model']] = [model_name, model]
-        self.results.loc[result_index,['score_train','score_test','rmse_train','rmse_test']] = [score_base_train, score_base_test, rmse_train, rmse_test]
+        self.results.loc[result_index,['score_train','score_test','rmse_train','rmse_test']] = [score_train, score_test, rmse_train, rmse_test]
 
+        if True:    # saving fit data to csv files
+            file_name = 'TG_internal_data/' + model_name
+            save_df_data_to_csv(data, file_name+'.csv')
+            save_df_data_to_csv(pd.DataFrame(y_test_scaled), file_name+'_y_test_scaled'+'.csv')
+            save_df_data_to_csv(pd.DataFrame(y_predict_test_scaled), file_name+'_y_predict_test_scaled'+'.csv')
+            save_df_data_to_csv(pd.DataFrame(X_test_scaled), file_name+'_X_test_scaled'+'.csv')
+
+    def _check_scaler(self, scaler):
+        #scaler.var_ = np.maximum(scaler.var_,0.001)
+        #scaler.scale_ = np.maximum(scaler.scale_ , 0.1)
+        scaler.scale_ = scaler.scale_ + 0.1
 
     def  try_data_transformations(self, data=None, target=None):
         assert type(data)==type(pd.DataFrame()), 'data must be pandas Dataframe'
@@ -210,10 +231,9 @@ class models():
                 #print('On column:', col, ' done transformation:', transformation[col])
             else:
                 data_transformed[col] = data[col]
-
         return data_transformed.copy(deep=True)
     
-    def  try_data_transformations_e(self, data=None, target=None):
+    def try_data_transformations_e(self, data=None, target=None):
         assert type(data)==type(pd.DataFrame()), 'data must be pandas Dataframe'
         assert data.index.isin(self.data_index).all(), 'Index of X_train must be in Data_index'
 
@@ -223,13 +243,14 @@ class models():
 
         scaler_X_ = StandardScaler()
         scaler_y_ = StandardScaler()
-        X_train = scaler_X_.fit_transform(X_train_.to_numpy())
-        y_train = scaler_y_.fit_transform(y_train_.to_numpy().reshape((-1,1)))
+        X_train = scaler_X_.fit_transform(X_train_)
+        y_train = scaler_y_.fit_transform(y_train_)
         
         y_train_transformed = pd.DataFrame(index=self.y_train.index)
         for trans_name, trans_lambda in self.transformations_e.items():
             col_name = y_train_.columns.tolist()[0] + ' transform ' + trans_name
             y_train_transformed[col_name] = trans_lambda(y_train)
+            y_train_transformed = y_train_transformed.copy()
         
         best_transformations = {}
         for col_y in y_train_transformed.columns:
@@ -246,11 +267,11 @@ class models():
                     X_train_temp_trans[col_name] = temp_try
                     scaler_X = StandardScaler()
                     scaler_y = StandardScaler()
-                    X = scaler_X.fit_transform(X_train_temp_trans[[col_name]].to_numpy().reshape((-1,1)))
-                    y = scaler_y.fit_transform(y_train_transformed[[col_y]].to_numpy().reshape((-1,1)))
-                    model = LinearRegression(n_jobs=-1)
-                    model.fit(X,y)
-                    y_pred = model.predict(X)
+                    X = scaler_X.fit_transform(X_train_temp_trans[[col_name]])
+                    y = scaler_y.fit_transform(y_train_transformed[[col_y]])
+                    model = LinearRegression()
+                    model.fit(X=X,y=y)
+                    y_pred = model.predict(X=X)
                     rmse = root_mean_squared_error(y_true=y, y_pred=y_pred)
                     item_name = col_name
                     results[rmse] = item_name
@@ -275,17 +296,16 @@ class models():
         assert data.index.isin(self.data_index).all(), 'Index of X_train must be in Data_index'
 
         scaler = StandardScaler()
-        data_scaled = scaler.fit_transform(data.to_numpy())
-
+        data_scaled = scaler.fit_transform(data)
         data_transformed = pd.DataFrame(index=data.index)
         for col_num, col in enumerate(data.columns):
             if col in transformation.keys():
                 data_transformed.loc[:,col] = self.transformations_e[transformation[col]](data_scaled[:,col_num])
             else:
                 data_transformed.loc[:,col] = data[col].copy()
-        
-        assert (data_transformed.index==data.index).all() ,  'Function data_transformation_e  Niezgodne indexy '
+            data_transformed = data_transformed.copy()        
 
+        assert (data_transformed.index==data.index).all() ,  'Function data_transformation_e  Niezgodne indexy '
         return data_transformed.copy(deep=True)
 
 # 4.2 Features 
@@ -296,18 +316,17 @@ class models():
         df_features = data.copy(deep=True)
         data_ = data.drop(target,axis=1)
         scaler = StandardScaler()
-        data_np = scaler.fit_transform(data_.to_numpy())
-
+        data_np = scaler.fit_transform(data_)
         col_names = data_.columns.tolist()
         for col_x_num, col_x in enumerate(col_names[:-1]):
             for col_y_num, col_y in enumerate(col_names[col_x_num+1:]):
                 for feature in self.features.keys():
                     col_name = col_x + '_' + col_y + '_' + feature
                     df_features[col_name] = self.features[feature]( data_np[:,col_x_num], data_np[:,col_y_num] )
+                    df_features = df_features.copy()
 
         assert (df_features.index==data.index).all() ,  'Function new_features  Niezgodne indexy '
         assert df_features.index.isin(self.data_index).all(), 'Function new_features Niezgodne indexy'
-
         return df_features.copy(deep=True)
 
     # 4.3 Features selection
@@ -317,10 +336,9 @@ class models():
 
         scaler_4_ML = StandardScaler
         model_4_ML = Lasso
-
         result = pd.DataFrame()
         result_choice = pd.DataFrame()
-        alpha_list = [ 0, 0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 1  ]
+        alpha_list = [ 0.001, 0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.999  ]
         for alpha in alpha_list:
             #print('Lasso alpha=', alpha)
             model_4_ML_args = {'alpha':alpha}
@@ -337,15 +355,11 @@ class models():
             #result_choice.loc[alpha, 'coef2'] = result_choice.loc[alpha, 'score_train']
             result_choice.loc[alpha, 'sum reduction + score'] = result_choice.loc[alpha, 'features_reduction'] + result_choice.loc[alpha, 'score_train']
 
-            
-
-            #print(model_lasso.coef_)
-        
-        
-
+        print('------------------------------------')
+        print('features_choose_lasso')
         print(result_choice)
         best_alpha = result_choice.sort_values(by='sum reduction + score', ascending=False).index[0]
-        print(best_alpha)
+        print('Best alpha:', best_alpha)
         col_name ='alfa ='+str(best_alpha)
         best_featurtes = result[col_name][result[col_name].ne(0)].index.to_list()
 
@@ -357,12 +371,10 @@ class models():
         plt.legend()
         plt.show()
 
-        print(result)
-        print('features counts:')
-        #result_abs = result.abs()
-        #print((result_abs>0.01).sum())
+        #print(result)
+        print('------------------------------------')
+        print('lasso features counts:')
         print((result!=0).sum())
-
         return result, best_featurtes
     
     def features_choose_PCA(self, data=None, target=None):
@@ -378,13 +390,12 @@ class models():
         feature_names = X_train.columns.tolist()
         
         scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train.to_numpy())
+        X_train_scaled = scaler.fit_transform(X_train)
         pca_selector = PCA(n_components=len(feature_names))
         X_train_pca_transform = pca_selector.fit_transform(X_train_scaled)
 
-
-        print('PCA explained_variance_ratio:', pca_selector.explained_variance_ratio_)
-        print('PCA singular_values:', pca_selector.singular_values_)
+        #print('PCA explained_variance_ratio:', pca_selector.explained_variance_ratio_)
+        #print('PCA singular_values:', pca_selector.singular_values_)
         temp = pd.DataFrame(pca_selector.explained_variance_ratio_)
         temp.plot(logy=True, title='explained_variance_ratio', xlabel='features')
         plt.show()
@@ -395,60 +406,46 @@ class models():
         scaler_4_ML = StandardScaler
         model_4_ML = LinearRegression
         model_4_ML_args = {}
-
-        result_variance_ratio = pd.DataFrame()
-        result_signular_values = pd.DataFrame()
         result_choice = pd.DataFrame()
         n_components_list = [ 1, 3, 5, 10, 20, 30, 40, 50, 60, 100  ]
         for n_components in n_components_list:
             pca_selector = PCA(n_components=n_components)
             pca_selector.fit(X_train_scaled)
             data_ = data.drop(target,axis=1).copy(deep=True)
-            #scaler_data = StandardScaler()
-            data_scaled = scaler.transform(data_.to_numpy())
+            data_scaled = scaler.transform(data_)
             data_pca = pca_selector.transform(data_scaled)
             df_data_pca = pd.DataFrame(data_pca, index=data.index)
             df_data_pca[target] = data[target].copy()
             self.fit_and_score_new_model(data=df_data_pca, target=target ,model_name='PCA_features '+str(n_components), scaler=scaler_4_ML, model=model_4_ML, model_arg=model_4_ML_args) #, y_transf=transformation[target])
-            col_name = 'n_components ='+str(n_components)
-            #result_variance_ratio[col_name] = pca_selector.explained_variance_ratio_
-            #result_signular_values[col_name] = pca_selector.singular_values_
             features_count = len(data_.columns)
             features_non_zero = n_components
             score_train = self.results['score_train'].iloc[-1]
             result_choice.loc[n_components, ['features_count', 'features_non_zero', 'score_train']] = features_count , features_non_zero, score_train
             result_choice.loc[n_components, 'features_reduction'] = result_choice.loc[n_components, 'features_non_zero']/result_choice.loc[n_components, 'features_count']
-            #result_choice.loc[alpha, 'coef2'] = result_choice.loc[alpha, 'score_train']
             result_choice.loc[n_components, '1/features_count + score'] = 1/result_choice.loc[n_components, 'features_non_zero'] +  result_choice.loc[n_components, 'score_train']
             
         print(result_choice)
         best_n_components = result_choice.sort_values(by='1/features_count + score', ascending=False).index[0]
         best_n_components = 20
         print(best_n_components)
-        #col_name ='alfa ='+str(n_components)
-        #best_featurtes = result_signular_values[col_name][result[col_name].notna()].index.to_list()
 
         # data for best pca
         pca_selector = PCA(n_components=20)
         pca_selector.fit(X_train_scaled)
         data_ = data.drop(target,axis=1).copy(deep=True)
-        #scaler_data = StandardScaler()
         data_scaled = scaler.transform(data_.to_numpy())
         data_pca = pca_selector.transform(data_scaled)
         df_data_pca = pd.DataFrame(data_pca, index=data.index)
         df_data_pca[target] = data[target].copy()
 
-        #sns.lineplot(data=result_choice, y=['coef1', 'coef2', 'coef3'])
-        #result_choice['features_count'].plot()
         result_choice['score_train'].plot()
         result_choice['1/features_count + score'].plot()
         plt.xlabel('alfa')
         plt.legend()
         plt.show()
-
         return df_data_pca, result_choice, best_n_components
 
-    def outliers_selection(self, data=[], target=None):
+    def outliers_selection(self, data=[], target=None, drop_outliers=False):
         assert type(data)==type(pd.DataFrame()), 'data must be pandas Dataframe'
         assert data.index.isin(self.data_index).all(), 'Index of X_train must be in Data_index'
 
@@ -463,24 +460,75 @@ class models():
         res_low = Q1 - 1.5*(Q3-Q1)
         res_high = Q3 + 1.5*(Q3-Q1)
         out_filter = (data_temp['residuals']<res_low) | (data_temp['residuals']>res_high)
+        
+        data_temp_test = pd.DataFrame(index=self.X_test.index)
+        data_temp_test['residuals'] = self._fit_last_residuals_test
+        out_filter_test = (data_temp_test['residuals']<res_low) | (data_temp_test['residuals']>res_high)
 
         assert data_temp.notna().all().to_numpy() , 'Function outliers_selection  nan w data_temp'
         assert len(data_temp)==len(self.X_train), 'Function outliers_selection  niezgodny rozmiar data_temp'
         assert (data_temp.index==self.X_train.index).all() ,  'Function outliers_selection  Niezgodne indexy '
 
+        self.X_train_outliers = self.X_train.loc[out_filter,:].copy(deep=True)
+        if drop_outliers==True:
+            self.X_train = self.X_train.drop(self.X_train[out_filter].index).copy(deep=True)
+            self.y_train = self.y_train.drop(self.y_train[out_filter].index).copy(deep=True)
 
-        # self.X_train_outliers = self.X_train.loc[out_filter,:].copy(deep=True)
-        # self.X_train = self.X_train.loc[~out_filter,:].copy(deep=True)
-        # self.y_train = self.y_train.loc[~out_filter,:].copy(deep=True)
-        
-        # self.X_test = self.X_test.copy(deep=True)
-        # self.y_train = self.y_train.copy(deep=True)
+            self.X_test = self.X_test.drop(self.X_test[out_filter_test].index).copy(deep=True)
+            self.y_test = self.y_test.drop(self.y_test[out_filter_test].index).copy(deep=True)
 
         return out_filter.sum()
+    
+    def optimize_lasso_alfa_on_test_score(self): #, data=None, target=None):
+
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+        study = optuna.create_study(direction='maximize')
+        study.optimize(self.optuna_objective, n_trials=200)
+
+        trial = study.best_trial
+        print('Accuracy: {}'.format(trial.value))
+        print("Best hyperparameters: {}".format(trial.params))
+
+        # fit lasso with best_alfa
+        data = pd.read_csv('TG_internal_data/data_all_features.csv', index_col=0)
+        target = 'mpg'
+        scaler_4_ML = StandardScaler
+        model_4_ML = Lasso
+        alpha = float(trial.params['alpha'])
+        model_4_ML_args = {'alpha':alpha}
+        self.fit_and_score_new_model(data=data, target=target ,model_name='OPTUNA Lasso alpha='+str(alpha), scaler=scaler_4_ML, model=model_4_ML, model_arg=model_4_ML_args)
+
+        model_lasso = self.results['model'].iloc[-1]
+        result_lasso = pd.DataFrame()
+        result_lasso['coef_value'] = model_lasso.coef_
+        result_lasso['coef_name'] = self.fit_last_feature_names
+        best_featurtes = result_lasso['coef_name'][result_lasso['coef_value'].ne(0)].to_list()
+        return trial.params, best_featurtes
+
+    def optuna_objective(self,trial):
+        data = pd.read_csv('TG_internal_data/data_all_features.csv', index_col=0)
+        target = 'mpg'
+        scaler_4_ML = StandardScaler
+        model_4_ML = Lasso
+        alpha = trial.suggest_float('alpha', 0.000001, 0.999, log=True)
+        model_4_ML_args = {'alpha':alpha}
+        self.fit_and_score_new_model(data=data, target=target ,model_name='OPTUNA Lasso alpha='+str(alpha), scaler=scaler_4_ML, model=model_4_ML, model_arg=model_4_ML_args)
+        score_test = float(self.results['score_test'].iloc[-1])
+
+        return score_test
 
 #------------------------------------------------------------
 # functions
 #------------------------------------------------------------
+
+def import_cars_dataset_keaggle():
+    import kagglehub
+    import shutil
+
+    # Download latest version
+    path = kagglehub.dataset_download("uciml/autompg-dataset")
+    #print("Path to dataset files:", path)
+    shutil.copy2(path+r'\\auto-mpg.csv' , r'_src_data/auto-mpg.csv')
 
 def load_data_from_csv(file):
     data = pd.read_csv(file)
