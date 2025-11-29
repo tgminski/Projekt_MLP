@@ -44,7 +44,6 @@ def load_data(input_path: Path = INPUT_PATH) -> Tuple[pd.DataFrame, np.ndarray]:
     Wczytuje dane z CSV i rozdziela na X (features) i y (target='mpg').
 
     Zwraca:
-    -------
     X : pd.DataFrame
     y : np.ndarray
     """
@@ -56,8 +55,8 @@ def load_data(input_path: Path = INPUT_PATH) -> Tuple[pd.DataFrame, np.ndarray]:
     y = df["mpg"].values
     X = df.drop(columns=["mpg"])
 
-    print(f"[INFO] Loaded data from: {input_path}")
-    print(f"[INFO] Shape X: {X.shape}, y: {y.shape}")
+    print(f"Loaded data from: {input_path}")
+    print(f"Shape X: {X.shape}, y: {y.shape}")
 
     return X, y
 
@@ -82,7 +81,7 @@ def load_trained_pipeline(pipeline_path: Path = PIPELINE_PATH):
         )
 
     pipeline = joblib.load(pipeline_path)
-    print(f"[INFO] Loaded trained pipeline from: {pipeline_path}")
+    print(f"Loaded trained pipeline from: {pipeline_path}")
 
     # mała kontrola
     if "prep" not in pipeline.named_steps or "model" not in pipeline.named_steps:
@@ -178,12 +177,12 @@ def run_shap_for_optuna_model(
     4) Oblicza wartości SHAP dla całego X.
 
     Zwraca:
-    -------
-    pipeline  : wytrenowany pipeline (prep + model)
-    X         : pd.DataFrame z cechami
-    y         : np.ndarray z targetem
+
+    pipeline : wytrenowany pipeline (prep + model)
+    X : pd.DataFrame z cechami
+    y : np.ndarray z targetem
     shap_vals : Explanation (wartości SHAP)
-    metrics   : dict z MAE_all, RMSE_all, R2_all
+    metrics : dict z MAE_all, RMSE_all, R2_all
     """
     print("[=== SHAP analysis for Optuna XGBRegressor ===")
 
